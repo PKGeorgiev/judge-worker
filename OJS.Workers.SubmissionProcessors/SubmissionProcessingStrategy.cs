@@ -5,13 +5,15 @@
 
     using log4net;
 
+    using Serilog;
+
     using OJS.Workers.Common;
     using OJS.Workers.Common.Exceptions;
     using OJS.Workers.ExecutionStrategies.Models;
 
     public abstract class SubmissionProcessingStrategy<TSubmission> : ISubmissionProcessingStrategy<TSubmission>
     {
-        protected ILog Logger { get; private set; }
+        protected ILogger Logger { get; private set; }
 
         protected ConcurrentQueue<TSubmission> SubmissionsForProcessing { get; private set; }
 
@@ -21,7 +23,7 @@
             Constants.DefaultJobLoopWaitTimeInMilliseconds;
 
         public virtual void Initialize(
-            ILog logger,
+            ILogger logger,
             ConcurrentQueue<TSubmission> submissionsForProcessing,
             object sharedLockObject)
         {
