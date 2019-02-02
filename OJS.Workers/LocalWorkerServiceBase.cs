@@ -10,6 +10,8 @@
 
     using log4net;
 
+    using Serilog;
+
     using OJS.Workers.Common;
     using OJS.Workers.SubmissionProcessors;
 
@@ -22,38 +24,38 @@
         {
             var loggerAssembly = Assembly.GetEntryAssembly() ?? Assembly.GetCallingAssembly();
 
-            this.Logger = LogManager.GetLogger(loggerAssembly, Constants.LocalWorkerServiceLogName);
-
             this.threads = new List<Thread>();
             this.submissionProcessors = new List<ISubmissionProcessor>();
         }
 
-        protected ILog Logger { get; }
+        protected ILogger Logger { get; private set; }
 
         protected IDependencyContainer DependencyContainer { get; private set; }
 
         protected override void OnStart(string[] args)
         {
-            this.Logger.Info($"{Constants.LocalWorkerServiceName} starting...");
-
             this.DependencyContainer = this.GetDependencyContainer();
+
+            this.Logger = this.DependencyContainer.GetInstance<ILogger>();
+
+            this.Logger.Information("{Service} is starting...", Constants.LocalWorkerServiceName);
 
             this.BeforeStartingThreads();
 
             this.StartThreads();
 
-            this.Logger.Info($"{Constants.LocalWorkerServiceName} started.");
+            this.Logger.Information("{Service} started", Constants.LocalWorkerServiceName);
         }
 
         protected override void OnStop()
         {
-            this.Logger.Info($"{Constants.LocalWorkerServiceName} stopping...");
+            this.Logger.Information("{Service} is stopping...", Constants.LocalWorkerServiceName);
 
             this.BeforeAbortingThreads();
 
             this.AbortThreads();
 
-            this.Logger.Info($"{Constants.LocalWorkerServiceName} stopped.");
+            this.Logger.Information("{Service} stopped", Constants.LocalWorkerServiceName);
         }
 
         protected virtual void BeforeStartingThreads()
@@ -105,9 +107,9 @@
         {
             foreach (var thread in this.threads)
             {
-                this.Logger.InfoFormat($"Starting {thread.Name}...");
+                this.Logger.Information("{Thread}: starting...", thread.Name);
                 thread.Start();
-                this.Logger.InfoFormat($"{thread.Name} started.");
+                this.Logger.Information("{Thread}: started", thread.Name);
                 Thread.Sleep(234);
             }
         }
@@ -117,7 +119,7 @@
             foreach (var submissionProcessor in this.submissionProcessors)
             {
                 submissionProcessor.Stop();
-                this.Logger.InfoFormat($"{submissionProcessor.Name} stopped.");
+                this.Logger.Information("{SubmissionProcessor}: stopped", submissionProcessor.Name);
             }
         }
 
@@ -126,7 +128,7 @@
             foreach (var thread in this.threads)
             {
                 thread.Abort();
-                this.Logger.InfoFormat($"{thread.Name} aborted.");
+                this.Logger.Information("{Thread}: aborted", thread.Name);
             }
         }
 

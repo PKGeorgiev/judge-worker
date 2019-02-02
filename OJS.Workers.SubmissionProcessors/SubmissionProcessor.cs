@@ -6,6 +6,8 @@
 
     using log4net;
 
+    using Serilog;
+
     using OJS.Workers.Common;
     using OJS.Workers.Common.Models;
     using OJS.Workers.ExecutionStrategies.Models;
@@ -14,7 +16,7 @@
     public class SubmissionProcessor<TSubmission> : ISubmissionProcessor
     {
         private readonly object sharedLockObject;
-        private readonly ILog logger;
+        private readonly ILogger logger;
         private readonly IDependencyContainer dependencyContainer;
         private readonly ConcurrentQueue<TSubmission> submissionsForProcessing;
         private readonly int portNumber;
@@ -31,8 +33,8 @@
         {
             this.Name = name;
 
-            this.logger = LogManager.GetLogger(name);
-            this.logger.Info($"{nameof(SubmissionProcessor<TSubmission>)} initializing...");
+            this.logger = dependencyContainer.GetInstance<ILogger>();
+            this.logger.Information("{SubmissionProcessor} initializing.", this.Name);
 
             this.stopping = false;
 
@@ -42,14 +44,14 @@
             this.sharedLockObject = sharedLockObject;
 
 
-            this.logger.Info($"{nameof(SubmissionProcessor<TSubmission>)} initialized.");
+            this.logger.Information("{SubmissionProcessor} initialized.", this.Name);
         }
 
         public string Name { get; set; }
 
         public void Start()
         {
-            this.logger.Info($"{nameof(SubmissionProcessor<TSubmission>)} starting...");
+            this.logger.Information("{SubmissionProcessor} starting...", this.Name);
 
             while (!this.stopping)
             {
@@ -70,7 +72,7 @@
                 }
             }
 
-            this.logger.Info($"{nameof(SubmissionProcessor<TSubmission>)} stopped.");
+            this.logger.Information("{SubmissionProcessor} stopped.", this.Name);
         }
 
         public void Stop()
@@ -139,7 +141,9 @@
             catch (Exception ex)
             {
                 this.logger.Error(
-                    $"{nameof(this.ProcessSubmission)} on submission #{submission.Id} has thrown an exception:",
+                    "{SubmissionProcessor}: The method {Method} has thrown an exception on submission {Submission}!",
+                    this.Name,
+                    nameof(this.ProcessSubmission),
                     ex);
 
                 this.submissionProcessingStrategy.OnError(submission);
@@ -149,7 +153,7 @@
         private void ProcessSubmission<TInput, TResult>(OjsSubmission<TInput> submission)
             where TResult : ISingleCodeRunResult, new()
         {
-            this.logger.Info($"Work on submission #{submission.Id} started.");
+            this.logger.Information("{SubmissionProcessor}: Work on submission {Submission} started.", this.Name, submission.Id);
 
             this.BeforeExecute(submission);
 
@@ -157,11 +161,11 @@
 
             var executionResult = executor.Execute<TInput, TResult>(submission);
 
-            this.logger.Info($"Work on submission #{submission.Id} ended.");
+            this.logger.Information("{SubmissionProcessor}: Work on submission {Submission} ended.", this.Name, submission.Id);
 
             this.ProcessExecutionResult(executionResult, submission);
 
-            this.logger.Info($"Submission #{submission.Id} successfully processed.");
+            this.logger.Information("{SubmissionProcessor}: Submission {Submission} was processed successfully.", this.Name, submission.Id);
         }
 
         private void BeforeExecute(IOjsSubmission submission)

@@ -4,6 +4,8 @@
 
     using log4net;
 
+    using Serilog;
+
     using OJS.Workers.Common;
 
     public interface ISubmissionProcessingStrategy<TSubmission>
@@ -11,7 +13,7 @@
         int JobLoopWaitTimeInMilliseconds { get; }
 
         void Initialize(
-            ILog logger,
+            ILogger logger,
             ConcurrentQueue<TSubmission> submissionsForProcessing,
             object sharedLockObject);
 
