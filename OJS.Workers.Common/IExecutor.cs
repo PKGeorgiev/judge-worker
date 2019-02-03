@@ -33,6 +33,6 @@
             bool useProcessTime = false,
             bool useSystemEncoding = false,
             bool dependOnExitCodeForRunTimeError = false,
-            double timeoutMultiplier = 1.5);
+            double timeoutMultiplier = 2.5);
     }
 }

@@ -8,6 +8,7 @@
 
     using OJS.Workers.Common;
     using OJS.Workers.Common.Models;
+    using Serilog;
 
     /// <summary>
     /// Defines the base of the work with compilers algorithm and allow the subclasses to implement some of the algorithm parts.
@@ -15,11 +16,25 @@
     /// <remarks>Template method design pattern is used.</remarks>
     public abstract class Compiler : ICompiler
     {
+
         protected const string CompilationDirectoryName = "CompilationDir";
 
-        protected Compiler(int processExitTimeOutMultiplier) =>
+        private static readonly Random Rnd = new Random();
+
+        private readonly ILogger logger;
+
+
+        protected Compiler(int processExitTimeOutMultiplier)
+        {
+            this.logger = Log.Logger;
             this.MaxProcessExitTimeOutInMilliseconds =
                 Constants.DefaultProcessExitTimeOutMilliseconds * processExitTimeOutMultiplier;
+
+            this.logger.Information(
+                "Instantiating compiler {Compiler} with MaxProcessExitTimeOutInMilliseconds: {MaxProcessExitTimeOutInMilliseconds}",
+                this.GetType().Name,
+                this.MaxProcessExitTimeOutInMilliseconds);
+        }
 
         public virtual bool ShouldDeleteSourceFile => true;
 
@@ -29,6 +44,8 @@
 
         public static ICompiler CreateCompiler(CompilerType compilerType)
         {
+            Log.Logger.Information("Creating compiler of type {@CompilerType}", compilerType);
+
             switch (compilerType)
             {
                 case CompilerType.None:
@@ -68,6 +85,13 @@
             string inputFile,
             string additionalArguments)
         {
+
+            this.logger.Information(
+                "Compiling with args {CompilerPath}, {InputFile}, {AdditionalArguments}",
+                compilerPath,
+                inputFile,
+                additionalArguments);
+
             if (compilerPath == null)
             {
                 throw new ArgumentNullException(nameof(compilerPath));
@@ -91,10 +115,18 @@
             this.CompilationDirectory = $"{Path.GetDirectoryName(inputFile)}\\{CompilationDirectoryName}";
             Directory.CreateDirectory(this.CompilationDirectory);
 
+            this.logger.Information(
+                "Created compilation directory {CompilationDirectory}",
+                this.CompilationDirectory);
+
             // Move source file if needed
             string newInputFilePath = this.RenameInputFile(inputFile);
             if (newInputFilePath != inputFile)
             {
+                this.logger.Information(
+                    "Moving the input file {InputFile} to a new path {NewInputFilePath}",
+                    inputFile,
+                    newInputFilePath);
                 File.Move(inputFile, newInputFilePath);
                 inputFile = newInputFilePath;
             }
@@ -114,6 +146,9 @@
             var processStartInfo = this.SetCompilerProcessStartInfo(compilerPath, directoryInfo, arguments);
 
             // Execute compiler
+            this.logger.Information(
+                "Executing the compiler with arguments: {@ProcessStartInfo}",
+                processStartInfo);
             var compilerOutput = ExecuteCompiler(processStartInfo, this.MaxProcessExitTimeOutInMilliseconds);
 
             if (this.ShouldDeleteSourceFile)
@@ -128,10 +163,15 @@
             if (!compilerOutput.IsSuccessful)
             {
                 // Compiled file is missing
+                this.logger.Warning("The compilation was unsuccessful!");
                 return new CompileResult(false, $"Compiled file is missing. Compiler output: {compilerOutput.Output}");
             }
 
             outputFile = this.ChangeOutputFileAfterCompilation(outputFile);
+
+            this.logger.Information(
+                "The compilation was successful! Output file: {OutputFile}",
+                outputFile);
 
             if (!string.IsNullOrWhiteSpace(compilerOutput.Output))
             {
@@ -185,6 +225,9 @@
 
             var outputWaitHandle = new AutoResetEvent(false);
             var errorWaitHandle = new AutoResetEvent(false);
+            var compilerTimedOut = false;
+            var thisThreadId = Thread.CurrentThread.ManagedThreadId;
+            
             using (outputWaitHandle)
             {
                 using (errorWaitHandle)
@@ -195,34 +238,48 @@
 
                         var outputHandle = new DataReceivedEventHandler((sender, e) =>
                         {
+                            Log.Logger.Information("{CompilerThreadId}: Received output data {CompilerOutputData}", thisThreadId, e.Data);
                             if (e.Data == null)
                             {
                                 outputWaitHandle.Set();
                             }
                             else
                             {
-                                outputBuilder.AppendLine(e.Data);
+                                lock (outputBuilder)
+                                {
+                                    outputBuilder.AppendLine(e.Data);
+                                }
                             }
                         });
 
                         var errorHandle = new DataReceivedEventHandler((sender, e) =>
                         {
+                            Log.Logger.Information("{CompilerThreadId}: Received error data {CompilerErrorData}", thisThreadId, e.Data);
+
                             if (e.Data == null)
                             {
                                 errorWaitHandle.Set();
                             }
                             else
                             {
-                                errorOutputBuilder.AppendLine(e.Data);
+                                lock (errorOutputBuilder)
+                                {
+                                    errorOutputBuilder.AppendLine(e.Data);
+                                }
                             }
                         });
 
                         process.OutputDataReceived += outputHandle;
                         process.ErrorDataReceived += errorHandle;
 
+                        Log.Logger.Information("Starting compiler's process");
+
+                        Thread.Sleep(Rnd.Next(100, 500));
+
                         var started = process.Start();
                         if (!started)
                         {
+                            Log.Logger.Warning("Could not start compiler");
                             return new CompilerOutput(1, "Could not start compiler.");
                         }
 
@@ -232,20 +289,40 @@
                         var exited = process.WaitForExit(processExitTimeOutMillisecond);
                         if (!exited)
                         {
-                            process.CancelOutputRead();
-                            process.CancelErrorRead();
+                            Log.Logger.Warning(
+                                "Waiting compiler's process reached the timeout of {CompilerProcessWaitTimeout}",
+                                processExitTimeOutMillisecond);
+
+                            //process.CancelOutputRead();
+                            //process.CancelErrorRead();
 
                             // Double check if the process has exited before killing it
                             if (!process.HasExited)
                             {
+                                Log.Logger.Warning("Killing compiler's process");
                                 process.Kill();
                             }
 
-                            return new CompilerOutput(1, "Compiler process timed out.");
+                            // return new CompilerOutput(1, "Compiler process timed out.");
+                            compilerTimedOut = true;
                         }
 
-                        outputWaitHandle.WaitOne(300);
-                        errorWaitHandle.WaitOne(300);
+                        Log.Logger.Warning("Calling WaitForExit()");
+
+                        // https://github.com/dotnet/corefx/issues/12219#issuecomment-252324082
+                        process.WaitForExit();
+                        Log.Logger.Warning("Done calling WaitForExit()");
+
+                        if (outputWaitHandle.WaitOne(2000) == false)
+                        {
+                            Log.Logger.Warning($"Waiting on {nameof(outputWaitHandle)} has timed out!");
+                        }
+
+                        if (errorWaitHandle.WaitOne(2000) == false)
+                        {
+                            Log.Logger.Warning($"Waiting on {nameof(errorWaitHandle)} has timed out!");
+                        }
+
                         process.OutputDataReceived -= outputHandle;
                         process.ErrorDataReceived -= errorHandle;
                         exitCode = process.ExitCode;
@@ -257,6 +334,26 @@
             var errorOutput = errorOutputBuilder.ToString().Trim();
 
             var compilerOutput = $"{output}{Environment.NewLine}{errorOutput}".Trim();
+
+            if (exitCode != 0 && string.IsNullOrEmpty(compilerOutput))
+            {
+                compilerOutput = "The compiler detected an error in your code but was unable to display it. Please submit your core again!";
+            }
+
+            if (compilerTimedOut == true)
+            {
+                Log.Logger.Warning(
+                    "Compiler's process has timed out with output: {CompilerOutputTimeout}",
+                    compilerOutput);
+
+                return new CompilerOutput(1, "Compiler process timed out. Please, submit your solution again!");
+            }
+
+            Log.Logger.Information(
+                "Compiler's process completed with exit code {CompilerExitCode} and the following output: {CompilerOutput}",
+                exitCode,
+                compilerOutput);
+
             return new CompilerOutput(exitCode, compilerOutput);
         }
     }

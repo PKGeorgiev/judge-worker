@@ -25,7 +25,7 @@
             string fileName,
             string workingDirectory,
             IEnumerable<string> arguments = null,
-            int bufferSize = 4096,
+            int bufferSize = 8192,
             bool useSystemEncoding = false)
         {
             // Initialize fields
@@ -287,10 +287,10 @@
                 true,
                 bufferSize);
             this.StandardError = new StreamReader(
-                new FileStream(standardErrorReadPipeHandle, FileAccess.Read, 4096, false),
+                new FileStream(standardErrorReadPipeHandle, FileAccess.Read, 8192, false),
                 useSystemEncoding ? Encoding.Default : new UTF8Encoding(false),
                 true,
-                4096);
+                8192);
 
             /*
              * Child processes that use such C run-time functions as printf() and fprintf() can behave poorly when redirected.

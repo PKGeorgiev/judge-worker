@@ -84,7 +84,15 @@
             var submissionsForProcessing = new ConcurrentQueue<TSubmission>();
             var sharedLockObject = new object();
 
-            for (var i = 1; i <= Settings.ThreadsCount; i++)
+            var threadCount = Environment.ProcessorCount * Settings.ThreadsCount;
+
+            this.Logger.Information(
+                "Spawning {SubmissionThreadCount} threads to process submissions (Processor count: {ProcessorCount}, Thread count from config: {ThreadCountFromConfig} )", 
+                threadCount, 
+                Environment.ProcessorCount, 
+                Settings.ThreadsCount);
+
+            for (var i = 1; i <= threadCount; i++)
             {
                 var submissionProcessor = new SubmissionProcessor<TSubmission>(
                     name: $"SP #{i}",

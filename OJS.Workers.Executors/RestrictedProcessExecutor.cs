@@ -17,7 +17,7 @@ namespace OJS.Workers.Executors
     public class RestrictedProcessExecutor : IExecutor
     {
         private const int TimeIntervalBetweenTwoMemoryConsumptionRequests = 45;
-        private const int TimeBeforeClosingOutputStreams = 300;
+        private const int TimeBeforeClosingOutputStreams = 2000;
         private const int MinimumMemoryLimitInBytes = 1 * 1024 * 1024;
 
         private static ILog logger;
@@ -50,7 +50,7 @@ namespace OJS.Workers.Executors
             bool useProcessTime = false,
             bool useSystemEncoding = false,
             bool dependOnExitCodeForRunTimeError = false,
-            double timeoutMultiplier = 1.5)
+            double timeoutMultiplier = 2.5)
         {
             this.AdjustTimeAndMemoryLimits(ref timeLimit, ref memoryLimit);
 

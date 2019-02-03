@@ -66,6 +66,7 @@
                 {
                     try
                     {
+                        // TODO
                         DirectoryHelpers.SafeDeleteDirectory(this.WorkingDirectory, true);
                     }
                     catch (Exception ex)
