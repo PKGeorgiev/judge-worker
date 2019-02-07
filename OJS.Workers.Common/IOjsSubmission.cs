@@ -25,5 +25,7 @@
         ExecutionType ExecutionType { get; }
 
         ExecutionStrategyType ExecutionStrategyType { get; }
+
+        int ProblemId { get; set; }
     }
 }

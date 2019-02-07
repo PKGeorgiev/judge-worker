@@ -1,4 +1,6 @@
-﻿namespace OJS.Workers
+﻿using OJS.Services.SignalR;
+
+namespace OJS.Workers
 {
     using System;
     using System.Collections.Concurrent;
@@ -19,6 +21,7 @@
     {
         private readonly ICollection<Thread> threads;
         private readonly ICollection<ISubmissionProcessor> submissionProcessors;
+        private IOjsHubService hubService;
 
         protected LocalWorkerServiceBase()
         {
@@ -38,18 +41,32 @@
 
             this.Logger = this.DependencyContainer.GetInstance<ILogger>();
 
-            this.Logger.Information("{Service} is starting...", Constants.LocalWorkerServiceName);
+            this.hubService = this.DependencyContainer.GetInstance<IOjsHubService>();
 
-            this.BeforeStartingThreads();
+            try
+            {
 
-            this.StartThreads();
+                this.Logger.Information("{Service} is starting...", Constants.LocalWorkerServiceName);
 
-            this.Logger.Information("{Service} started", Constants.LocalWorkerServiceName);
+                this.hubService.Start();
+
+                this.BeforeStartingThreads();
+
+                this.StartThreads();
+
+                this.Logger.Information("{Service} started", Constants.LocalWorkerServiceName);
+            }
+            catch (Exception e)
+            {
+                this.Logger.Error("Exception during {Service} start!", Constants.LocalWorkerServiceName, e );
+            }
         }
 
         protected override void OnStop()
         {
             this.Logger.Information("{Service} is stopping...", Constants.LocalWorkerServiceName);
+
+            this.hubService.Stop();
 
             this.BeforeAbortingThreads();
 

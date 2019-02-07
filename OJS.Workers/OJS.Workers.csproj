@@ -66,6 +66,10 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\Services\OJS.Services\OJS.Services.csproj">
+      <Project>{44659A90-F81E-4007-8729-C37F4F650A81}</Project>
+      <Name>OJS.Services</Name>
+    </ProjectReference>
     <ProjectReference Include="..\OJS.Workers.Common\OJS.Workers.Common.csproj">
       <Project>{7F714D0B-CE81-4DD7-B6B2-62080FE22CD8}</Project>
       <Name>OJS.Workers.Common</Name>
@@ -76,6 +80,7 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <None Include="app.config" />
     <None Include="packages.config" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
